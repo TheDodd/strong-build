@@ -31,6 +31,7 @@ function printHelp($0, prn) {
   prn('  --scripts       If installing, run scripts (to build addons).');
   prn('  -b,--bundle     Modify package to bundle deployment dependencies.');
   prn('  -p,--pack       Pack into a publishable archive (with dependencies).');
+  prn('  -d,--dest       A destination directory to move the final artifact to.');
   prn('');
   prn('Git specific options:');
   prn('  -c,--commit     Commit build output (branch specified by --onto).');
@@ -88,6 +89,7 @@ exports.build = function build(argv, callback) {
       's(scripts)',
       'i(install)',
       'b(bundle)',
+      'd:(dest)',
       'p(pack)',
       'O:(onto)',
       'c(commit)',
@@ -99,6 +101,7 @@ exports.build = function build(argv, callback) {
   var install;
   var scripts;
   var bundle;
+  var dest;
   var pack;
   var commit;
 
@@ -118,6 +121,9 @@ exports.build = function build(argv, callback) {
         break;
       case 'b':
         bundle = true;
+        break;
+      case 'd':
+        dest = option.optarg;
         break;
       case 'p':
         pack = true;
@@ -172,6 +178,10 @@ exports.build = function build(argv, callback) {
     steps.push(doNpmInstall);
   }
 
+  if (dest) {
+    steps.push(doDest);
+  }
+
   if (bundle) {
     steps.push(doBundle);
   }
@@ -224,6 +234,17 @@ exports.build = function build(argv, callback) {
     steps.push(runStep('npm prune --production'));
     vasync.pipeline({ funcs: steps }, function(er) {
       return callback(er);
+    });
+  }
+
+  function doDest(_, callback) {
+    // Ensure the destination specified on the command-line exists and can be
+    // written to.
+    fs.existsSync(dest, function(exists) {
+        // Attempt to create dest if it does not exist.
+        if (exists !== true) {
+            fs.mkdirSync(dest);
+        }
     });
   }
 
@@ -297,7 +318,7 @@ exports.build = function build(argv, callback) {
 
       // npm pack output is a single line with the pack file name
       var src = output.split('\n')[0];
-      var dst = path.join('..', src);
+      var dst = (dest !== "undefined") ? path.join(dest, src) : path.join('..', src);
 
       console.log('Running `mv -f %s %s`', src, dst);
 
